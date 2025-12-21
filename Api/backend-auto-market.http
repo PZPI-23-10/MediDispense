@@ -1,0 +1,6 @@
+@backend_auto_market_HostAddress = http://localhost:5240
+
+GET {{backend_auto_market_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
