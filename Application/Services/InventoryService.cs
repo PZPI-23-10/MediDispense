@@ -36,7 +36,7 @@ public class InventoryService(IDataContext dataContext) : IInventoryService
             {
                 Id = c.Id,
                 Label = c.CellLabel,
-                MedicationName = c.Medication!.Name,
+                MedicationName = c.Medication != null ? c.Medication.Name : string.Empty,
                 Quantity = c.CurrentQuantity
             })
             .ToListAsync();
@@ -44,15 +44,29 @@ public class InventoryService(IDataContext dataContext) : IInventoryService
         return cells;
     }
 
-    public async Task RefillCell(UpdateCellDto dto)
+    public async Task RefillCell(Application.DTOs.Inventory.UpdateCellDto dto)
     {
         var cell = await dataContext.Cells.FindAsync(dto.CellId);
 
         if (cell == null)
             throw new NotFoundException($"Cell not found with id: ({dto.CellId})");
 
+        if (string.IsNullOrWhiteSpace(dto.Label))
+            throw new ValidationException("Cell label is required");
+
         if (dto.Quantity < 0)
             throw new ValidationException("Quantity cannot be negative");
+
+        if (!await dataContext.Medications.AnyAsync(m => m.Id == dto.MedicationId))
+            throw new NotFoundException($"Medication {dto.MedicationId} does not exist");
+
+        var duplicateLabelExists = await dataContext.Cells
+            .AnyAsync(c => c.DeviceId == cell.DeviceId &&
+                           c.Id != cell.Id &&
+                           c.CellLabel == dto.Label);
+
+        if (duplicateLabelExists)
+            throw new ValidationException($"Cell with label '{dto.Label}' already exists in this device");
 
         cell.CellLabel = dto.Label;
         cell.CurrentQuantity = dto.Quantity;

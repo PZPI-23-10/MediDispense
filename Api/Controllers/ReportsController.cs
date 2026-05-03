@@ -1,6 +1,7 @@
 using Application.DTOs.Dispense;
 using Application.Interfaces.Services;
 using Domain.Entities;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -8,7 +9,7 @@ namespace Api.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-[Authorize(Roles = UserRoles.Admin)]
+[Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme, Roles = UserRoles.Admin)]
 public class ReportsController(IReportsService reportsService) : ControllerBase
 {
     [HttpGet]

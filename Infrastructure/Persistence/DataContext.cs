@@ -17,8 +17,16 @@ public class DataContext(DbContextOptions options)
     public DbSet<PrescriptionMedication> PrescriptionMedications { get; set; }
     public DbSet<DispenseLog> DispenseLogs { get; set; }
 
+    public override int SaveChanges()
+    {
+        UpdateDateTimeProperties();
+        UpdateAuditableEntities();
+        return base.SaveChanges();
+    }
+
     public override Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
     {
+        UpdateDateTimeProperties();
         UpdateAuditableEntities();
         return base.SaveChangesAsync(cancellationToken);
     }
@@ -29,7 +37,7 @@ public class DataContext(DbContextOptions options)
 
         foreach (var e in entries)
         {
-            var now = DateTime.UtcNow;
+            var now = DateTimeOffset.UtcNow;
 
             if (e.State == EntityState.Added)
             {
@@ -41,6 +49,37 @@ public class DataContext(DbContextOptions options)
                 e.Property(x => x.LastModified).CurrentValue = now;
             }
         }
+    }
+
+    private void UpdateDateTimeProperties()
+    {
+        var entries = ChangeTracker.Entries()
+            .Where(e => e.State is EntityState.Added or EntityState.Modified);
+
+        foreach (var entry in entries)
+        {
+            foreach (var property in entry.Properties)
+            {
+                if (property.CurrentValue is DateTime dateTime)
+                {
+                    property.CurrentValue = ToUtc(dateTime);
+                }
+                else if (property.CurrentValue is DateTimeOffset dateTimeOffset)
+                {
+                    property.CurrentValue = dateTimeOffset.ToUniversalTime();
+                }
+            }
+        }
+    }
+
+    private static DateTime ToUtc(DateTime dateTime)
+    {
+        return dateTime.Kind switch
+        {
+            DateTimeKind.Utc => dateTime,
+            DateTimeKind.Local => dateTime.ToUniversalTime(),
+            _ => DateTime.SpecifyKind(dateTime, DateTimeKind.Utc)
+        };
     }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)

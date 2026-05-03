@@ -1,4 +1,5 @@
-﻿using Application.DTOs.Device;
+using System.ComponentModel.DataAnnotations;
+using Application.DTOs.Device;
 using Application.Exceptions;
 using Application.Interfaces.Persistence;
 using Application.Interfaces.Services;
@@ -16,7 +17,7 @@ public class DeviceService(IDataContext dataContext) : IDeviceService
         if (device == null)
             throw new NotFoundException("Device not found");
 
-        device.LastActive = DateTime.UtcNow;
+        device.LastActive = DateTimeOffset.UtcNow;
 
         if (device.Status == DeviceStatus.Offline)
             device.Status = DeviceStatus.Online;
@@ -26,7 +27,7 @@ public class DeviceService(IDataContext dataContext) : IDeviceService
 
     public async Task<IEnumerable<DeviceDetailsDto>> GetAll()
     {
-        var devices = await dataContext.Devices
+        return await dataContext.Devices
             .Select(d => new DeviceDetailsDto
             {
                 Id = d.Id,
@@ -41,8 +42,6 @@ public class DeviceService(IDataContext dataContext) : IDeviceService
                 }).ToList()
             })
             .ToListAsync();
-
-        return devices;
     }
 
     public async Task<DeviceDetailsDto> GetById(int deviceId)
@@ -69,6 +68,8 @@ public class DeviceService(IDataContext dataContext) : IDeviceService
 
     public async Task<DeviceDetailsDto> Add(CreateDeviceDto dto)
     {
+        ValidateDeviceTitle(dto.Title);
+
         var device = new Device
         {
             Title = dto.Title,
@@ -76,6 +77,30 @@ public class DeviceService(IDataContext dataContext) : IDeviceService
         };
 
         dataContext.Devices.Add(device);
+        await dataContext.SaveChangesAsync(CancellationToken.None);
+
+        return await GetById(device.Id);
+    }
+
+    public async Task<DeviceDetailsDto> Update(int deviceId, UpdateDeviceDto dto)
+    {
+        ValidateDeviceTitle(dto.Title);
+
+        var device = await dataContext.Devices.FindAsync(deviceId);
+
+        if (device == null)
+            throw new NotFoundException($"Device with id {deviceId} not found");
+
+        device.Title = dto.Title;
+
+        if (!string.IsNullOrWhiteSpace(dto.Status))
+        {
+            if (!Enum.TryParse(dto.Status, true, out DeviceStatus status))
+                throw new ValidationException($"Device status '{dto.Status}' is invalid");
+
+            device.Status = status;
+        }
+
         await dataContext.SaveChangesAsync(CancellationToken.None);
 
         return await GetById(device.Id);
@@ -92,21 +117,35 @@ public class DeviceService(IDataContext dataContext) : IDeviceService
         await dataContext.SaveChangesAsync();
     }
 
+    public async Task<IEnumerable<CellDto>> GetCells(int deviceId)
+    {
+        await EnsureDeviceExists(deviceId);
+
+        return await dataContext.Cells
+            .Where(c => c.DeviceId == deviceId)
+            .Select(c => new CellDto
+            {
+                Id = c.Id,
+                Label = c.CellLabel,
+                MedicationName = c.Medication != null ? c.Medication.Name : string.Empty,
+                Quantity = c.CurrentQuantity
+            })
+            .ToListAsync();
+    }
+
     public async Task<CreateCellResult> CreateCell(int deviceId, CreateCellDto dto)
     {
-        var device = await dataContext.Devices.FindAsync(deviceId);
-        if (device == null)
-            throw new NotFoundException($"Device with ID {deviceId} not found");
+        ValidateCellLabel(dto.Label);
 
-        var medicationExists = await dataContext.Medications.AnyAsync(m => m.Id == dto.MedicationId);
-        if (!medicationExists)
-            throw new NotFoundException($"Medication {dto.MedicationId} does not exist");
+        if (dto.InitialQuantity < 0)
+            throw new ValidationException("Initial quantity cannot be negative");
 
-        var cellExists = await dataContext.Cells
-            .AnyAsync(c => c.DeviceId == deviceId && c.CellLabel == dto.Label);
+        await EnsureDeviceExists(deviceId);
 
-        if (cellExists)
-            throw new InvalidOperationException($"Cell with label '{dto.Label}' already exists in this device.");
+        if (dto.MedicationId.HasValue)
+            await EnsureMedicationExists(dto.MedicationId.Value);
+
+        await EnsureCellLabelIsUnique(deviceId, dto.Label);
 
         var cell = new Cell
         {
@@ -120,5 +159,92 @@ public class DeviceService(IDataContext dataContext) : IDeviceService
         await dataContext.SaveChangesAsync(CancellationToken.None);
 
         return new CreateCellResult { Id = cell.Id, Label = cell.CellLabel };
+    }
+
+    public async Task<CellDto> UpdateCell(int deviceId, int cellId, UpdateCellDto dto)
+    {
+        ValidateCellLabel(dto.Label);
+
+        if (dto.Quantity < 0)
+            throw new ValidationException("Quantity cannot be negative");
+
+        var cell = await dataContext.Cells.FindAsync(cellId);
+
+        if (cell == null)
+            throw new NotFoundException($"Cell with id {cellId} not found");
+
+        if (cell.DeviceId != deviceId)
+            throw new ValidationException($"Cell with id {cellId} does not belong to device {deviceId}");
+
+        if (dto.MedicationId.HasValue)
+            await EnsureMedicationExists(dto.MedicationId.Value);
+
+        await EnsureCellLabelIsUnique(deviceId, dto.Label, cellId);
+
+        cell.CellLabel = dto.Label;
+        cell.MedicationId = dto.MedicationId;
+        cell.CurrentQuantity = dto.Quantity;
+
+        await dataContext.SaveChangesAsync(CancellationToken.None);
+
+        return await dataContext.Cells
+            .Where(c => c.Id == cellId)
+            .Select(c => new CellDto
+            {
+                Id = c.Id,
+                Label = c.CellLabel,
+                MedicationName = c.Medication != null ? c.Medication.Name : string.Empty,
+                Quantity = c.CurrentQuantity
+            })
+            .SingleAsync();
+    }
+
+    public async Task DeleteCell(int deviceId, int cellId)
+    {
+        var cell = await dataContext.Cells.FindAsync(cellId);
+
+        if (cell == null)
+            throw new NotFoundException($"Cell with id {cellId} not found");
+
+        if (cell.DeviceId != deviceId)
+            throw new ValidationException($"Cell with id {cellId} does not belong to device {deviceId}");
+
+        dataContext.Cells.Remove(cell);
+        await dataContext.SaveChangesAsync(CancellationToken.None);
+    }
+
+    private static void ValidateDeviceTitle(string title)
+    {
+        if (string.IsNullOrWhiteSpace(title))
+            throw new ValidationException("Device title is required");
+    }
+
+    private static void ValidateCellLabel(string label)
+    {
+        if (string.IsNullOrWhiteSpace(label))
+            throw new ValidationException("Cell label is required");
+    }
+
+    private async Task EnsureDeviceExists(int deviceId)
+    {
+        if (!await dataContext.Devices.AnyAsync(d => d.Id == deviceId))
+            throw new NotFoundException($"Device with id {deviceId} not found");
+    }
+
+    private async Task EnsureMedicationExists(int medicationId)
+    {
+        if (!await dataContext.Medications.AnyAsync(m => m.Id == medicationId))
+            throw new NotFoundException($"Medication {medicationId} does not exist");
+    }
+
+    private async Task EnsureCellLabelIsUnique(int deviceId, string label, int? ignoredCellId = null)
+    {
+        var exists = await dataContext.Cells
+            .AnyAsync(c => c.DeviceId == deviceId &&
+                           c.CellLabel == label &&
+                           (!ignoredCellId.HasValue || c.Id != ignoredCellId.Value));
+
+        if (exists)
+            throw new ValidationException($"Cell with label '{label}' already exists in this device");
     }
 }

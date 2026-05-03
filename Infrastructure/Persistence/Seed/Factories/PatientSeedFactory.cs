@@ -8,10 +8,10 @@ public static class PatientSeedFactory
     {
         return new List<Patient>
         {
-            new() { FullName = "John Doe", DateOfBirth = new DateTime(1980, 5, 15).ToUniversalTime() },
-            new() { FullName = "Jane Smith", DateOfBirth = new DateTime(1992, 11, 20).ToUniversalTime() },
-            new() { FullName = "Oleksandr Petrenko", DateOfBirth = new DateTime(1975, 3, 10).ToUniversalTime() },
-            new() { FullName = "Maria Kovenko", DateOfBirth = new DateTime(2001, 7, 25).ToUniversalTime() }
+            new() { FullName = "John Doe", DateOfBirth = new DateTime(1980, 5, 15, 0, 0, 0, DateTimeKind.Utc) },
+            new() { FullName = "Jane Smith", DateOfBirth = new DateTime(1992, 11, 20, 0, 0, 0, DateTimeKind.Utc) },
+            new() { FullName = "Oleksandr Petrenko", DateOfBirth = new DateTime(1975, 3, 10, 0, 0, 0, DateTimeKind.Utc) },
+            new() { FullName = "Maria Kovenko", DateOfBirth = new DateTime(2001, 7, 25, 0, 0, 0, DateTimeKind.Utc) }
         };
     }
 }

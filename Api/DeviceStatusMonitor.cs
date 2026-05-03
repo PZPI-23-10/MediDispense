@@ -31,7 +31,7 @@ public class DeviceStatusMonitor(IServiceScopeFactory scopeFactory) : Background
         using var scope = scopeFactory.CreateScope();
         var context = scope.ServiceProvider.GetRequiredService<IDataContext>();
 
-        var cutoffTime = DateTime.UtcNow.Subtract(_timeoutThreshold);
+        var cutoffTime = DateTimeOffset.UtcNow.Subtract(_timeoutThreshold);
 
         await context.Devices
             .Where(d => d.Status == DeviceStatus.Online && d.LastActive < cutoffTime)

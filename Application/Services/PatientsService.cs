@@ -14,7 +14,7 @@ public class PatientsService(IDataContext dataContext) : IPatientsService
         var patient = new Patient
         {
             FullName = dto.FullName,
-            DateOfBirth = dto.DateOfBirth,
+            DateOfBirth = ToUtc(dto.DateOfBirth),
         };
 
         dataContext.Patients.Add(patient);
@@ -31,7 +31,7 @@ public class PatientsService(IDataContext dataContext) : IPatientsService
             throw new NotFoundException("Patient not found");
 
         patient.FullName = dto.FullName;
-        patient.DateOfBirth = dto.DateOfBirth;
+        patient.DateOfBirth = ToUtc(dto.DateOfBirth);
 
         await dataContext.SaveChangesAsync(CancellationToken.None);
     }
@@ -91,4 +91,13 @@ public class PatientsService(IDataContext dataContext) : IPatientsService
         await dataContext.SaveChangesAsync(CancellationToken.None);
     }
 
+    private static DateTime ToUtc(DateTime dateTime)
+    {
+        return dateTime.Kind switch
+        {
+            DateTimeKind.Utc => dateTime,
+            DateTimeKind.Local => dateTime.ToUniversalTime(),
+            _ => DateTime.SpecifyKind(dateTime, DateTimeKind.Utc)
+        };
+    }
 }
