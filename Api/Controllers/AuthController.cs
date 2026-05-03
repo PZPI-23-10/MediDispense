@@ -1,4 +1,6 @@
-﻿using Application.DTOs.Auth;
+using Api.Extensions;
+using Application.DTOs.Auth;
+using Application.Exceptions;
 using Application.Interfaces.Services;
 using Domain.Entities;
 using FluentValidation;
@@ -44,13 +46,18 @@ public class AuthController(IAuthService authService) : ControllerBase
 
     [HttpGet]
     [Route("{userId:int}")]
+    [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme, Roles = $"{UserRoles.Admin},{UserRoles.Doctor}")]
     public async Task<ActionResult<UserResponse>> GetUser(int userId)
     {
+        if (!User.IsInRole(UserRoles.Admin) && User.GetUserId() != userId)
+            throw new ForbiddenAccessException("User can only access own profile");
+
         UserResponse result = await authService.GetUserById(userId);
         return Ok(result);
     }
 
     [HttpGet]
+    [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme, Roles = UserRoles.Admin)]
     public async Task<ActionResult<IEnumerable<UserResponse>>> GetAllUsers()
     {
         var result = await authService.GetAllUsers();

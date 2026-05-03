@@ -10,6 +10,24 @@ namespace Application.Services;
 
 public class InventoryService(IDataContext dataContext) : IInventoryService
 {
+    public async Task<IEnumerable<AvailableMedicationDto>> GetAvailableMedications()
+    {
+        return await dataContext.Cells
+            .Where(c => c.MedicationId != null && c.CurrentQuantity > 0)
+            .Select(c => new AvailableMedicationDto
+            {
+                DeviceId = c.DeviceId,
+                DeviceTitle = c.Device.Title,
+                DeviceStatus = c.Device.Status.ToString(),
+                CellId = c.Id,
+                CellLabel = c.CellLabel,
+                MedicationId = c.MedicationId!.Value,
+                MedicationName = c.Medication!.Name,
+                Quantity = c.CurrentQuantity
+            })
+            .ToListAsync();
+    }
+
     public async Task<IEnumerable<CellDto>> GetDeviceInventory(int deviceId)
     {
         List<CellDto> cells = await dataContext.Cells
@@ -18,7 +36,7 @@ public class InventoryService(IDataContext dataContext) : IInventoryService
             {
                 Id = c.Id,
                 Label = c.CellLabel,
-                MedicationName = c.Medication.Name,
+                MedicationName = c.Medication!.Name,
                 Quantity = c.CurrentQuantity
             })
             .ToListAsync();

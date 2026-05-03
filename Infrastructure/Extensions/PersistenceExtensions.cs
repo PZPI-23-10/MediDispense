@@ -33,12 +33,57 @@ public static class PersistenceExtensions
     {
         using var scope = services.CreateScope();
         var roleManager = scope.ServiceProvider.GetRequiredService<RoleManager<IdentityRole<int>>>();
+        var userManager = scope.ServiceProvider.GetRequiredService<UserManager<User>>();
 
         if (!await roleManager.RoleExistsAsync(UserRoles.Admin))
             await roleManager.CreateAsync(new IdentityRole<int>(UserRoles.Admin));
 
         if (!await roleManager.RoleExistsAsync(UserRoles.Doctor))
             await roleManager.CreateAsync(new IdentityRole<int>(UserRoles.Doctor));
+
+        var admin = await userManager.FindByNameAsync("admin");
+
+        if (admin == null)
+        {
+            admin = new User
+            {
+                UserName = "admin",
+                NormalizedUserName = "ADMIN",
+                Email = "admin@example.com",
+                NormalizedEmail = "ADMIN@EXAMPLE.COM",
+                FullName = "Admin",
+                EmailConfirmed = true,
+                SecurityStamp = Guid.NewGuid().ToString()
+            };
+        }
+
+        admin.PasswordHash = userManager.PasswordHasher.HashPassword(admin, "admin");
+
+        if (admin.Id == 0)
+        {
+            IdentityResult createResult = await userManager.CreateAsync(admin);
+
+            if (!createResult.Succeeded)
+                throw new InvalidOperationException(
+                    $"Could not seed admin user: {string.Join(',', createResult.Errors.Select(e => e.Code))}");
+        }
+        else
+        {
+            IdentityResult updateResult = await userManager.UpdateAsync(admin);
+
+            if (!updateResult.Succeeded)
+                throw new InvalidOperationException(
+                    $"Could not update admin user: {string.Join(',', updateResult.Errors.Select(e => e.Code))}");
+        }
+
+        if (!await userManager.IsInRoleAsync(admin, UserRoles.Admin))
+        {
+            IdentityResult roleResult = await userManager.AddToRoleAsync(admin, UserRoles.Admin);
+
+            if (!roleResult.Succeeded)
+                throw new InvalidOperationException(
+                    $"Could not add admin role: {string.Join(',', roleResult.Errors.Select(e => e.Code))}");
+        }
 
         return services;
     }

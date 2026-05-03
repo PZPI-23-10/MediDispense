@@ -23,7 +23,7 @@ public class PatientsService(IDataContext dataContext) : IPatientsService
         return patient.Id;
     }
 
-    public async Task Update(int id, CreatePatientDto dto)
+    public async Task Update(int id, int currentUserId, bool isAdmin, CreatePatientDto dto)
     {
         var patient = await dataContext.Patients.FindAsync(id);
 
@@ -36,9 +36,11 @@ public class PatientsService(IDataContext dataContext) : IPatientsService
         await dataContext.SaveChangesAsync(CancellationToken.None);
     }
 
-    public async Task<PatientDto> GetById(int id)
+    public async Task<PatientDto> GetById(int id, int currentUserId, bool isAdmin)
     {
-        Patient? patient = await dataContext.Patients.FindAsync(id);
+        Patient? patient = await dataContext.Patients
+            .AsNoTracking()
+            .FirstOrDefaultAsync(p => p.Id == id);
 
         if (patient == null)
             throw new NotFoundException("Patient not found");
@@ -51,9 +53,22 @@ public class PatientsService(IDataContext dataContext) : IPatientsService
         };
     }
 
-    public async Task<IEnumerable<PatientDto>> GetAll()
+    public async Task<IEnumerable<PatientDto>> GetAll(int currentUserId, bool isAdmin)
     {
         return await dataContext.Patients
+            .Select(p => new PatientDto
+            {
+                Id = p.Id,
+                FullName = p.FullName,
+                DateOfBirth = p.DateOfBirth
+            })
+            .ToListAsync();
+    }
+
+    public async Task<IEnumerable<PatientDto>> GetMy(int doctorId)
+    {
+        return await dataContext.Patients
+            .Where(p => p.Prescriptions.Any(pr => pr.DoctorId == doctorId))
             .Select(p => new PatientDto
             {
                 Id = p.Id,
@@ -75,4 +90,5 @@ public class PatientsService(IDataContext dataContext) : IPatientsService
         dataContext.Patients.Remove(patient);
         await dataContext.SaveChangesAsync(CancellationToken.None);
     }
+
 }

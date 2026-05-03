@@ -24,6 +24,7 @@ public static class ErrorExtensions
                     NotFoundException => (int)HttpStatusCode.NotFound,
                     ForbiddenAccessException => (int)HttpStatusCode.Forbidden,
                     UnauthorizedException => (int)HttpStatusCode.Unauthorized,
+                    ConflictException => (int)HttpStatusCode.Conflict,
 
                     BadHttpRequestException => (int)HttpStatusCode.BadRequest,
                     OperationCanceledException => (int)HttpStatusCode.ServiceUnavailable,

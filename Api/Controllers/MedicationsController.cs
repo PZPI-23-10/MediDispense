@@ -12,6 +12,7 @@ namespace Api.Controllers;
 public class MedicationsController(IMedicationsService medicationsService) : ControllerBase
 {
     [HttpGet]
+    [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme, Roles = $"{UserRoles.Admin},{UserRoles.Doctor}")]
     public async Task<IEnumerable<MedicationDto>> GetAll()
     {
         return await medicationsService.GetAll();

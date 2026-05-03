@@ -1,7 +1,7 @@
-﻿using System.Security.Claims;
 using Api.Extensions;
 using Application.DTOs.Prescription;
 using Application.Interfaces.Services;
+using Domain.Entities;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -10,7 +10,7 @@ namespace Api.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-[Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme)]
+[Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme, Roles = $"{UserRoles.Admin},{UserRoles.Doctor}")]
 public class PrescriptionsController(IPrescriptionService prescriptionService) : ControllerBase
 {
     [HttpPost]
@@ -18,7 +18,7 @@ public class PrescriptionsController(IPrescriptionService prescriptionService) :
     {
         var userId = User.GetUserId();
 
-        var prescription = await prescriptionService.Create(userId, request);
+        var prescription = await prescriptionService.Create(userId, User.IsInRole(UserRoles.Admin), request);
 
         return Ok(prescription);
     }
@@ -37,7 +37,7 @@ public class PrescriptionsController(IPrescriptionService prescriptionService) :
     [Route("{id:int}")]
     public async Task<ActionResult<PrescriptionResponseDto>> Get(int id)
     {
-        var prescription = await prescriptionService.Get(id);
+        var prescription = await prescriptionService.Get(id, User.GetUserId(), User.IsInRole(UserRoles.Admin));
 
         return Ok(prescription);
     }
@@ -48,20 +48,28 @@ public class PrescriptionsController(IPrescriptionService prescriptionService) :
         [FromQuery] int? doctorId,
         [FromQuery] int? status)
     {
-        var currentUserRole = User.FindFirst(ClaimTypes.Role)?.Value;
         var currentUserId = User.GetUserId();
 
         IEnumerable<PrescriptionResponseDto> prescriptions =
-            await prescriptionService.GetAll(patientId, doctorId, status, currentUserId, currentUserRole);
+            await prescriptionService.GetAll(patientId, doctorId, status, currentUserId, User.IsInRole(UserRoles.Admin));
 
         return Ok(prescriptions);
+    }
+
+    [HttpPut("{id:int}")]
+    public async Task<ActionResult<PrescriptionResponseDto>> Update(int id, [FromBody] UpdatePrescriptionRequest request)
+    {
+        PrescriptionResponseDto prescription =
+            await prescriptionService.Update(id, User.GetUserId(), User.IsInRole(UserRoles.Admin), request);
+
+        return Ok(prescription);
     }
 
     [HttpPost]
     [Route("cancel")]
     public async Task<IActionResult> Cancel([FromBody] int id)
     {
-        await prescriptionService.Cancel(id);
+        await prescriptionService.Cancel(id, User.GetUserId(), User.IsInRole(UserRoles.Admin));
 
         return Ok();
     }

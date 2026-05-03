@@ -5,6 +5,7 @@ namespace Application.Interfaces.Services;
 
 public interface IInventoryService
 {
+    Task<IEnumerable<AvailableMedicationDto>> GetAvailableMedications();
     Task<IEnumerable<CellDto>> GetDeviceInventory(int deviceId);
     Task RefillCell(UpdateCellDto dto);
 }

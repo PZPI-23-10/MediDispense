@@ -10,10 +10,19 @@ namespace Api.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-[Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme, Roles = UserRoles.Admin)]
+[Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme, Roles = $"{UserRoles.Admin},{UserRoles.Doctor}")]
 public class InventoryController(IInventoryService inventoryService) : ControllerBase
 {
+    [HttpGet("available")]
+    public async Task<ActionResult<IEnumerable<AvailableMedicationDto>>> GetAvailableMedications()
+    {
+        IEnumerable<AvailableMedicationDto> items = await inventoryService.GetAvailableMedications();
+
+        return Ok(items);
+    }
+
     [HttpGet("device/{deviceId:int}")]
+    [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme, Roles = UserRoles.Admin)]
     public async Task<ActionResult<IEnumerable<CellDto>>> GetDeviceInventory(int deviceId)
     {
         IEnumerable<CellDto> cells = await inventoryService.GetDeviceInventory(deviceId);
@@ -22,6 +31,7 @@ public class InventoryController(IInventoryService inventoryService) : Controlle
     }
 
     [HttpPut("update")]
+    [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme, Roles = UserRoles.Admin)]
     public async Task<IActionResult> RefillCell([FromBody] UpdateCellDto dto)
     {
         await inventoryService.RefillCell(dto);
