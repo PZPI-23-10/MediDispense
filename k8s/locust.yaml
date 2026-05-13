@@ -1,0 +1,106 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: medidispense-locustfile
+data:
+  locustfile.py: |
+    from locust import HttpUser, between, task
+
+
+    class MediDispenseUser(HttpUser):
+        wait_time = between(0.1, 0.5)
+        token = None
+
+        def on_start(self):
+            response = self.client.post(
+                "/api/auth/login",
+                json={"username": "admin", "password": "admin"},
+                name="/api/auth/login",
+                catch_response=True,
+            )
+
+            if response.status_code != 200:
+                response.failure(f"login failed with status {response.status_code}")
+                return
+
+            data = response.json()
+            self.token = data.get("token") or data.get("Token")
+
+            if not self.token:
+                response.failure("login response did not contain a token")
+
+        @property
+        def auth_headers(self):
+            if not self.token:
+                return {}
+
+            return {"Authorization": f"Bearer {self.token}"}
+
+        @task(4)
+        def synthetic_workload(self):
+            self.client.get(
+                "/api/diagnostics/work?iterations=750000",
+                name="/api/diagnostics/work",
+            )
+
+        @task(2)
+        def get_medications(self):
+            self.client.get(
+                "/api/medications",
+                headers=self.auth_headers,
+                name="/api/medications",
+            )
+
+        @task(1)
+        def get_instance(self):
+            self.client.get(
+                "/api/diagnostics/instance",
+                name="/api/diagnostics/instance",
+            )
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: medidispense-locust
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: medidispense-locust
+  template:
+    metadata:
+      labels:
+        app: medidispense-locust
+    spec:
+      containers:
+        - name: locust
+          image: locustio/locust:2.32.4
+          imagePullPolicy: IfNotPresent
+          args:
+            - -f
+            - /mnt/locust/locustfile.py
+            - --host
+            - http://medidispense-api:8080
+          ports:
+            - containerPort: 8089
+              name: web
+          volumeMounts:
+            - name: locustfile
+              mountPath: /mnt/locust
+      volumes:
+        - name: locustfile
+          configMap:
+            name: medidispense-locustfile
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: medidispense-locust
+spec:
+  type: LoadBalancer
+  selector:
+    app: medidispense-locust
+  ports:
+    - name: web
+      port: 8089
+      targetPort: web

@@ -55,25 +55,14 @@ public static class PersistenceExtensions
                 EmailConfirmed = true,
                 SecurityStamp = Guid.NewGuid().ToString()
             };
-        }
 
-        admin.PasswordHash = userManager.PasswordHasher.HashPassword(admin, "admin");
+            admin.PasswordHash = userManager.PasswordHasher.HashPassword(admin, "admin");
 
-        if (admin.Id == 0)
-        {
             IdentityResult createResult = await userManager.CreateAsync(admin);
 
             if (!createResult.Succeeded)
                 throw new InvalidOperationException(
                     $"Could not seed admin user: {string.Join(',', createResult.Errors.Select(e => e.Code))}");
-        }
-        else
-        {
-            IdentityResult updateResult = await userManager.UpdateAsync(admin);
-
-            if (!updateResult.Succeeded)
-                throw new InvalidOperationException(
-                    $"Could not update admin user: {string.Join(',', updateResult.Errors.Select(e => e.Code))}");
         }
 
         if (!await userManager.IsInRoleAsync(admin, UserRoles.Admin))

@@ -53,8 +53,55 @@ public static class Program
         app.UseAuthorization();
 
         app.UseErrorHandler();
+        MapDiagnosticsEndpoints(app);
         app.MapControllers();
 
         await app.RunAsync();
+    }
+
+    private static void MapDiagnosticsEndpoints(WebApplication app)
+    {
+        app.MapGet("/health", () => Results.Ok(new
+        {
+            Status = "Healthy",
+            Instance = GetInstanceName(),
+            TimestampUtc = DateTimeOffset.UtcNow
+        }));
+
+        app.MapGet("/api/diagnostics/instance", () => Results.Ok(new
+        {
+            Instance = GetInstanceName(),
+            MachineName = Environment.MachineName,
+            TimestampUtc = DateTimeOffset.UtcNow
+        }));
+
+        app.MapGet("/api/diagnostics/work", (int? iterations) =>
+        {
+            int workIterations = Math.Clamp(iterations ?? 750_000, 10_000, 5_000_000);
+            ulong checksum = 1469598103934665603;
+
+            unchecked
+            {
+                for (int i = 0; i < workIterations; i++)
+                {
+                    checksum ^= (uint)i;
+                    checksum *= 1099511628211;
+                    checksum ^= checksum >> 32;
+                }
+            }
+
+            return Results.Ok(new
+            {
+                Instance = GetInstanceName(),
+                Iterations = workIterations,
+                Checksum = checksum.ToString("x"),
+                TimestampUtc = DateTimeOffset.UtcNow
+            });
+        });
+    }
+
+    private static string GetInstanceName()
+    {
+        return Environment.GetEnvironmentVariable("HOSTNAME") ?? Environment.MachineName;
     }
 }
